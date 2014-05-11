@@ -210,6 +210,7 @@ $(INSTALLED_BUILD_PROP_TARGET): $(BUILDINFO_SH) $(INTERNAL_BUILD_ID_MAKEFILE) $(
 			TARGET_CPU_ABI="$(TARGET_CPU_ABI)" \
 			TARGET_CPU_ABI2="$(TARGET_CPU_ABI2)" \
 			TARGET_AAPT_CHARACTERISTICS="$(TARGET_AAPT_CHARACTERISTICS)" \
+			TARGET_UNIFIED_DEVICE="$(TARGET_UNIFIED_DEVICE)" \
 			$(PRODUCT_BUILD_PROP_OVERRIDES) \
 			BUILD_DISPLAY_ID="$(BUILD_DISPLAY_ID)" \
 			BUILD_NUMBER="$(BUILD_NUMBER)" \
@@ -1292,6 +1293,9 @@ $(BUILT_TARGET_FILES_PACKAGE): \
 ifdef INSTALLED_KERNEL_TARGET
 	$(hide) $(ACP) $(INSTALLED_KERNEL_TARGET) $(zip_root)/RECOVERY/kernel
 endif
+ifdef INSTALLED_DTIMAGE_TARGET
+	$(hide) $(ACP) $(INSTALLED_DTIMAGE_TARGET) $(zip_root)/RECOVERY/dt
+endif
 ifdef INSTALLED_2NDBOOTLOADER_TARGET
 	$(hide) $(ACP) \
 		$(INSTALLED_2NDBOOTLOADER_TARGET) $(zip_root)/RECOVERY/second
@@ -1312,6 +1316,9 @@ endif
 		$(TARGET_ROOT_OUT),$(zip_root)/BOOT/RAMDISK)
 ifdef INSTALLED_KERNEL_TARGET
 	$(hide) $(ACP) $(INSTALLED_KERNEL_TARGET) $(zip_root)/BOOT/kernel
+endif
+ifdef INSTALLED_DTIMAGE_TARGET
+	$(hide) $(ACP) $(INSTALLED_DTIMAGE_TARGET) $(zip_root)/BOOT/dt
 endif
 ifdef INSTALLED_RAMDISK_TARGET
 	$(hide) $(ACP) $(INSTALLED_RAMDISK_TARGET) $(zip_root)/BOOT/ramdisk.img
@@ -1381,6 +1388,11 @@ ifneq ($(USE_SET_METADATA),false)
 endif
 	$(hide) echo "update_rename_support=1" >> $(zip_root)/META/misc_info.txt
 	$(call generate-userimage-prop-dictionary, $(zip_root)/META/misc_info.txt)
+ifdef PRODUCT_DEFAULT_DEV_CERTIFICATE
+	$(hide) build/tools/getb64key.py $(PRODUCT_DEFAULT_DEV_CERTIFICATE).x509.pem > $(zip_root)/META/releasekey.txt
+else
+	$(hide) build/tools/getb64key.py $(DEFAULT_SYSTEM_DEV_CERTIFICATE).x509.pem > $(zip_root)/META/releasekey.txt
+endif
 	@# Zip everything up, preserving symlinks
 	$(hide) (cd $(zip_root) && zip -qry ../$(notdir $@) .)
 	@# Run fs_config on all the system, boot ramdisk, and recovery ramdisk files in the zip, and save the output
@@ -1433,6 +1445,10 @@ else
     $(INTERNAL_OTA_PACKAGE_TARGET): override_device := $(TARGET_OTA_ASSERT_DEVICE)
 endif
 
+ifneq ($(TARGET_UNIFIED_DEVICE),)
+    $(INTERNAL_OTA_PACKAGE_TARGET): override_prop := --override_prop=true
+endif
+
 $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(DISTTOOLS)
 	@echo "$(OTA_FROM_TARGET_SCRIPT)" > $(PRODUCT_OUT)/ota_script_path
 	@echo "$(override_device)" > $(PRODUCT_OUT)/ota_override_device
@@ -1442,7 +1458,7 @@ $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(DISTTOOLS)
 	   -p $(HOST_OUT) \
 	   -k $(KEY_CERT_PAIR) \
 	   --backup=$(backuptool) \
-	   --override_device=$(override_device) \
+	   --override_device=$(override_device) $(override_prop) \
 	   $(BUILT_TARGET_FILES_PACKAGE) $@
 
 CM_TARGET_PACKAGE := $(PRODUCT_OUT)/cm-$(CM_VERSION).zip
